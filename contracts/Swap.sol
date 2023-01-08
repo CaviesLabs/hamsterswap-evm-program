@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity 0.8.17;
+pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import "./Entity.sol";
 
@@ -17,6 +21,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 	 * @dev Administration configurations
 	 */
 	uint256 public maxAllowedItems;
+	uint256 public maxAllowedOptions;
 	mapping(address => bool) public whitelistedItemAddresses;
 
 	/**
@@ -26,66 +31,251 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 
 	/**
 	 * @dev Configure swap registry
+	 * @param _maxAllowedItems: maximum amount of allowed items
+	 * @param _maxAllowedOptions: maximum amount of allowed options
+	 * @param _whitelistedItemAddresses: whitelisted addresses
+	 * @param _blackListedItemAddresses: blacklisted addresses
 	 */
 	function configure(
 		uint256 _maxAllowedItems,
-		address[] memory _whitelistedItemAddresses
-	) external onlyOwner whenNotPaused {}
-
-	/**
-	 * @dev Create proposal and deposit items
-	 */
-	function createProposal(
-		string memory id,
-		Entity.SwapItem[] memory swapItemsData,
-		Entity.SwapOption[] memory swapOptionsData,
-		uint256 expiredAt
-	) external whenNotPaused {
+		uint256 _maxAllowedOptions,
+		address[] memory _whitelistedItemAddresses,
+		address[] memory _blackListedItemAddresses
+	) external onlyOwner whenNotPaused {
 		/**
-		 * @dev Avoid duplicated proposal id to be recorded in.
+		 * @dev Configure values
 		 */
-		assert(bytes(proposals[id].id).length == 0);
+		maxAllowedItems = _maxAllowedItems;
+		maxAllowedOptions = _maxAllowedOptions;
 
 		/**
-		 * @dev Assign proposal
+		 * @dev Whitelisting addresses
 		 */
-		proposals[id].id = id;
-		proposals[id].expiredAt = expiredAt;
+		for (uint256 i = 0; i < _whitelistedItemAddresses.length; i++) {
+			whitelistedItemAddresses[_whitelistedItemAddresses[i]] = true;
+		}
 
 		/**
-		 * @dev Deposit items and adjust data properly
+		 * @dev Blacklisted addresses
 		 */
-		for (uint256 i = 0; i < swapItemsData.length; i++) {
-			/**
-			 * @dev Initialize empty struct
-			 */
-			Entity.SwapItem memory swapItem;
-
-			/**
-			 * @dev Assign data
-			 */
-			swapItem.id = swapItemsData[i].id;
-			swapItem.amount = swapItemsData[i].amount;
-			swapItem.contractAddress = swapItemsData[i].contractAddress;
-			swapItem.itemType = swapItemsData[i].itemType;
-			swapItem.owner = msg.sender;
-			swapItem.status = Entity.SwapItemStatus.Deposited;
-
-			/**
-			 * @dev Transfer assets to contract
-			 */
-
-			/**
-			 * @dev Now we push into the array
-			 */
-			proposals[id].offeredItems.push(swapItem);
+		for (uint256 i = 0; i < _blackListedItemAddresses.length; i++) {
+			whitelistedItemAddresses[_blackListedItemAddresses[i]] = false;
 		}
 	}
 
+	//
+	//    /**
+	//     * @dev Create proposal and deposit items
+	//	 * @param id: proposal id
+	//	 * @param swapItemsData: swap item list to be passed into proposal creation
+	//	 * @param swapOptionsData: swap option list to be passed into proposal creation
+	//	 * @param expiredAt: expiry date of the proposal
+	//	 */
+	//    function createProposal(
+	//        string memory id,
+	//        Entity.SwapItem[] memory swapItemsData,
+	//        Entity.SwapOption[] memory swapOptionsData,
+	//        uint256 expiredAt
+	//    ) external whenNotPaused {
+	//        /**
+	//         * @dev Avoid duplicated proposal id to be recorded in.
+	//		 */
+	//        assert(bytes(proposals[id].id).length == 0);
+	//
+	//        /**
+	//        * @dev Require constraints
+	//		*/
+	//        assert(swapOptionsData.length <= maxAllowedOptions);
+	//        assert(swapItemsData.length <= maxAllowedItems);
+	//
+	//        /**
+	//         * @dev Assign proposal
+	//		 */
+	//        proposals[id].id = id;
+	//        proposals[id].expiredAt = expiredAt;
+	//        proposals[id].swapOptions = swapOptionsData;
+	//        proposals[id].status = Entity.ProposalStatus.Deposited;
+	//        proposals[id].owner = msg.sender;
+	//
+	//        /**
+	//         * @dev Deposit items and adjust data properly
+	//		 */
+	//        for (uint256 i = 0; i < swapItemsData.length; i++) {
+	//            /**
+	//            * @dev Must be a whitelisted addresses
+	//            */
+	//            assert(whitelistedItemAddresses[swapItemsData[i].contractAddress] == true);
+	//
+	//            /**
+	//             * @dev Initialize empty struct
+	//			 */
+	//            Entity.SwapItem memory swapItem;
+	//
+	//            /**
+	//             * @dev Assign data
+	//			 */
+	//            swapItem.id = swapItemsData[i].id;
+	//            swapItem.contractAddress = swapItemsData[i].contractAddress;
+	//            swapItem.itemType = swapItemsData[i].itemType;
+	//            swapItem.owner = msg.sender;
+	//            swapItem.status = Entity.SwapItemStatus.Deposited;
+	//            swapItem.tokenId = swapItemsData[i].tokenId;
+	//            swapItem.amount = swapItemsData[i].amount;
+	//
+	//            /**
+	//             * @dev Deposit ERC721 assets
+	//			 */
+	//            if (swapItem.itemType == Entity.SwapItemType.Nft) {
+	//                swapItem.amount = 1;
+	//
+	//                /**
+	//                * @dev Deposit
+	//				*/
+	//                IERC721(swapItem.contractAddress).safeTransferFrom(
+	//                    msg.sender,
+	//                    address(this),
+	//                    swapItem.tokenId
+	//                );
+	//            }
+	//
+	//            /**
+	//            * @dev Deposit ERC20 assets
+	//			*/
+	//            if (swapItem.itemType == Entity.SwapItemType.Currency) {
+	//                /**
+	//                * @dev Deposit
+	//				*/
+	//                assert(
+	//                    IERC20(swapItem.contractAddress).transferFrom(
+	//                        msg.sender,
+	//                        address(this),
+	//                        swapItem.amount
+	//                    )
+	//                );
+	//            }
+	//
+	//            /**
+	//             * @dev Now we push into the array
+	//			 */
+	//            proposals[id].offeredItems.push(swapItem);
+	//        }
+	//    }
+
+	/**
+	 * @dev Fulfill proposal
+	 * @param proposalId: the proposal id that targeted to
+	 * @param optionId: the option id that user wants to fulfil with
+	 */
 	function fulfillProposal(string memory proposalId, string memory optionId)
 		external
 		whenNotPaused
-	{}
+	{
+		/**
+		 * @dev Must be an existed proposal
+		 */
+		assert(bytes(proposals[proposalId].id).length > 0);
+
+		/**
+		 * @dev The proposal must be at deposited phase.
+		 */
+		assert(proposals[proposalId].status == Entity.ProposalStatus.Deposited);
+
+		/**
+		 * @dev The proposal must be still in time window.
+		 */
+		assert(proposals[proposalId].expiredAt <= block.timestamp);
+
+		/**
+		 * @dev Adjust proposal value.
+		 */
+		proposals[proposalId].fulfilledBy = msg.sender;
+		proposals[proposalId].fulfilledByOptionId = optionId;
+
+		/**
+		 * @dev Find the proposal
+		 */
+		uint256 index = maxAllowedItems + 1;
+
+		for (uint256 i = 0; i < proposals[proposalId].swapOptions.length; i++) {
+			Entity.Proposal memory _proposal = proposals[proposalId];
+			Entity.SwapOption memory _option = _proposal.swapOptions[i];
+			string memory _optionId = _option.id;
+
+			if (areStringsEqual(_optionId, optionId)) {
+				index = i;
+				break;
+			}
+		}
+
+		/**
+		 * @dev Check for constraints
+		 */
+		assert(index != maxAllowedItems + 1);
+
+		/**
+		 * @dev Binding option
+		 */
+		Entity.SwapOption memory option = proposals[proposalId].swapOptions[
+			index
+		];
+
+		/**
+		 * @dev Check for constraints
+		 */
+		assert(bytes(proposals[proposalId].swapOptions[index].id).length > 0);
+		assert(option.askingItems.length <= maxAllowedItems);
+
+		/**
+		 * @dev Deposit required items
+		 */
+		for (uint256 i = 0; i < option.askingItems.length; i++) {
+			/**
+			 * @dev Must be a whitelisted addresses
+			 */
+			assert(
+				whitelistedItemAddresses[
+					option.askingItems[i].contractAddress
+				] == true
+			);
+
+			/**
+			 * @dev Change to deposited
+			 */
+			option.askingItems[i].status = Entity.SwapItemStatus.Deposited;
+
+			/**
+			 * @dev Deposit ERC721 assets
+			 */
+			if (option.askingItems[i].itemType == Entity.SwapItemType.Nft) {
+				/**
+				 * @dev Deposit
+				 */
+				IERC721(option.askingItems[i].contractAddress).safeTransferFrom(
+						msg.sender,
+						address(this),
+						option.askingItems[i].tokenId
+					);
+			}
+
+			/**
+			 * @dev Deposit ERC20 assets
+			 */
+			if (
+				option.askingItems[i].itemType == Entity.SwapItemType.Currency
+			) {
+				/**
+				 * @dev Deposit
+				 */
+				assert(
+					IERC20(option.askingItems[i].contractAddress).transferFrom(
+						msg.sender,
+						address(this),
+						option.askingItems[i].amount
+					)
+				);
+			}
+		}
+	}
 
 	function cancelProposal(string memory proposalId) external whenNotPaused {}
 
@@ -105,5 +295,14 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 
 	function unpause() public onlyOwner {
 		_unpause();
+	}
+
+	function areStringsEqual(string memory s1, string memory s2)
+		private
+		pure
+		returns (bool)
+	{
+		return
+			keccak256(abi.encodePacked(s1)) == keccak256(abi.encodePacked(s2));
 	}
 }

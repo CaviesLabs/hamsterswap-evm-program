@@ -5,7 +5,7 @@ library Entity {
 	 * @dev Define the item type
 	 */
 	enum SwapItemType {
-		NFT,
+		Nft,
 		Currency
 	}
 
