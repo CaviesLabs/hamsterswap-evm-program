@@ -205,6 +205,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		 */
 		proposals[proposalId].fulfilledBy = msg.sender;
 		proposals[proposalId].fulfilledByOptionId = optionId;
+		proposals[proposalId].status = Entity.ProposalStatus.Redeemed;
 
 		/**
 		 * @dev Find the proposal
@@ -356,7 +357,86 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		}
 	}
 
-	function cancelProposal(string memory proposalId) external whenNotPaused {}
+	/**
+	 * @dev Cancel proposal and withdraw assets
+	 * @param proposalId: proposal id that was targeted
+	 */
+	function cancelProposal(string memory proposalId) external whenNotPaused {
+		/**
+		 * @dev Must be an existed proposal
+		 */
+		assert(bytes(proposals[proposalId].id).length > 0);
+
+		/**
+		 * @dev The proposal must be at deposited phase.
+		 */
+		assert(proposals[proposalId].owner == msg.sender);
+
+		/**
+		 * @dev The proposal must be at deposited phase.
+		 */
+		assert(proposals[proposalId].status == Entity.ProposalStatus.Deposited);
+
+		/**
+		 * @dev Modify value
+		 */
+		proposals[proposalId].status = Entity.ProposalStatus.Withdrawn;
+
+		/**
+		 * @dev And then withdraw items
+		 */
+		for (
+			uint256 i = 0;
+			i < proposals[proposalId].offeredItems.length;
+			i++
+		) {
+			/**
+			 * @dev Change to withdrawn
+			 */
+			proposals[proposalId].offeredItems[i].status = Entity
+				.SwapItemStatus
+				.Withdrawn;
+
+			/**
+			 * @dev withdraw ERC721 assets
+			 */
+			if (
+				proposals[proposalId].offeredItems[i].itemType ==
+				Entity.SwapItemType.Nft
+			) {
+				/**
+				 * @dev withdraw
+				 */
+				IERC721(proposals[proposalId].offeredItems[i].contractAddress)
+					.safeTransferFrom(
+						address(this),
+						msg.sender,
+						proposals[proposalId].offeredItems[i].tokenId
+					);
+			}
+
+			/**
+			 * @dev withdraw ERC20 assets
+			 */
+			if (
+				proposals[proposalId].offeredItems[i].itemType ==
+				Entity.SwapItemType.Currency
+			) {
+				/**
+				 * @dev withdraw
+				 */
+				assert(
+					IERC20(
+						proposals[proposalId].offeredItems[i].contractAddress
+					).transferFrom(
+							address(this),
+							msg.sender,
+							proposals[proposalId].offeredItems[i].amount
+						)
+				);
+			}
+		}
+	}
 
 	/// @custom:oz-upgrades-unsafe-allow constructor
 	constructor() {
