@@ -63,103 +63,118 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		}
 	}
 
-	//
-	//    /**
-	//     * @dev Create proposal and deposit items
-	//	 * @param id: proposal id
-	//	 * @param swapItemsData: swap item list to be passed into proposal creation
-	//	 * @param swapOptionsData: swap option list to be passed into proposal creation
-	//	 * @param expiredAt: expiry date of the proposal
-	//	 */
-	//    function createProposal(
-	//        string memory id,
-	//        Entity.SwapItem[] memory swapItemsData,
-	//        Entity.SwapOption[] memory swapOptionsData,
-	//        uint256 expiredAt
-	//    ) external whenNotPaused {
-	//        /**
-	//         * @dev Avoid duplicated proposal id to be recorded in.
-	//		 */
-	//        assert(bytes(proposals[id].id).length == 0);
-	//
-	//        /**
-	//        * @dev Require constraints
-	//		*/
-	//        assert(swapOptionsData.length <= maxAllowedOptions);
-	//        assert(swapItemsData.length <= maxAllowedItems);
-	//
-	//        /**
-	//         * @dev Assign proposal
-	//		 */
-	//        proposals[id].id = id;
-	//        proposals[id].expiredAt = expiredAt;
-	//        proposals[id].swapOptions = swapOptionsData;
-	//        proposals[id].status = Entity.ProposalStatus.Deposited;
-	//        proposals[id].owner = msg.sender;
-	//
-	//        /**
-	//         * @dev Deposit items and adjust data properly
-	//		 */
-	//        for (uint256 i = 0; i < swapItemsData.length; i++) {
-	//            /**
-	//            * @dev Must be a whitelisted addresses
-	//            */
-	//            assert(whitelistedItemAddresses[swapItemsData[i].contractAddress] == true);
-	//
-	//            /**
-	//             * @dev Initialize empty struct
-	//			 */
-	//            Entity.SwapItem memory swapItem;
-	//
-	//            /**
-	//             * @dev Assign data
-	//			 */
-	//            swapItem.id = swapItemsData[i].id;
-	//            swapItem.contractAddress = swapItemsData[i].contractAddress;
-	//            swapItem.itemType = swapItemsData[i].itemType;
-	//            swapItem.owner = msg.sender;
-	//            swapItem.status = Entity.SwapItemStatus.Deposited;
-	//            swapItem.tokenId = swapItemsData[i].tokenId;
-	//            swapItem.amount = swapItemsData[i].amount;
-	//
-	//            /**
-	//             * @dev Deposit ERC721 assets
-	//			 */
-	//            if (swapItem.itemType == Entity.SwapItemType.Nft) {
-	//                swapItem.amount = 1;
-	//
-	//                /**
-	//                * @dev Deposit
-	//				*/
-	//                IERC721(swapItem.contractAddress).safeTransferFrom(
-	//                    msg.sender,
-	//                    address(this),
-	//                    swapItem.tokenId
-	//                );
-	//            }
-	//
-	//            /**
-	//            * @dev Deposit ERC20 assets
-	//			*/
-	//            if (swapItem.itemType == Entity.SwapItemType.Currency) {
-	//                /**
-	//                * @dev Deposit
-	//				*/
-	//                assert(
-	//                    IERC20(swapItem.contractAddress).transferFrom(
-	//                        msg.sender,
-	//                        address(this),
-	//                        swapItem.amount
-	//                    )
-	//                );
-	//            }
-	//
-	//            /**
-	//             * @dev Now we push into the array
-	//			 */
-	//            proposals[id].offeredItems.push(swapItem);
-	//        }
-	//    }
+	/**
+	 * @dev Create proposal and deposit items
+	 * @param id: proposal id
+	 * @param swapItemsData: swap item list to be passed into proposal creation
+	 * @param swapOptionsData: swap option list to be passed into proposal creation
+	 * @param expiredAt: expiry date of the proposal
+	 */
+	function createProposal(
+		string memory id,
+		Entity.SwapItem[] memory swapItemsData,
+		Entity.SwapOption[] memory swapOptionsData,
+		uint256 expiredAt
+	) external whenNotPaused {
+		/**
+		 * @dev Avoid duplicated proposal id to be recorded in.
+		 */
+		assert(bytes(proposals[id].id).length == 0);
+
+		/**
+		 * @dev Require constraints
+		 */
+		assert(swapOptionsData.length <= maxAllowedOptions);
+		assert(swapItemsData.length <= maxAllowedItems);
+
+		/**
+		 * @dev Assign proposal
+		 */
+		proposals[id].id = id;
+		proposals[id].expiredAt = expiredAt;
+		proposals[id].status = Entity.ProposalStatus.Deposited;
+		proposals[id].owner = msg.sender;
+
+		/**
+		 * @dev Aggregate swap option data
+		 */
+		for (uint256 i = 0; i < swapOptionsData.length; i++) {
+			for (
+				uint256 j = 0;
+				j < swapOptionsData[i].askingItems.length;
+				j++
+			) {
+				proposals[id].swapOptions[i].askingItems[j] = swapOptionsData[i]
+					.askingItems[j];
+			}
+		}
+
+		/**
+		 * @dev Deposit items and adjust data properly
+		 */
+		for (uint256 i = 0; i < swapItemsData.length; i++) {
+			/**
+			 * @dev Must be a whitelisted addresses
+			 */
+			assert(
+				whitelistedItemAddresses[swapItemsData[i].contractAddress] ==
+					true
+			);
+
+			/**
+			 * @dev Initialize empty struct
+			 */
+			Entity.SwapItem memory swapItem;
+
+			/**
+			 * @dev Assign data
+			 */
+			swapItem.id = swapItemsData[i].id;
+			swapItem.contractAddress = swapItemsData[i].contractAddress;
+			swapItem.itemType = swapItemsData[i].itemType;
+			swapItem.owner = msg.sender;
+			swapItem.status = Entity.SwapItemStatus.Deposited;
+			swapItem.tokenId = swapItemsData[i].tokenId;
+			swapItem.amount = swapItemsData[i].amount;
+
+			/**
+			 * @dev Deposit ERC721 assets
+			 */
+			if (swapItem.itemType == Entity.SwapItemType.Nft) {
+				swapItem.amount = 1;
+
+				/**
+				 * @dev Deposit
+				 */
+				IERC721(swapItem.contractAddress).safeTransferFrom(
+					msg.sender,
+					address(this),
+					swapItem.tokenId
+				);
+			}
+
+			/**
+			 * @dev Deposit ERC20 assets
+			 */
+			if (swapItem.itemType == Entity.SwapItemType.Currency) {
+				/**
+				 * @dev Deposit
+				 */
+				assert(
+					IERC20(swapItem.contractAddress).transferFrom(
+						msg.sender,
+						address(this),
+						swapItem.amount
+					)
+				);
+			}
+
+			/**
+			 * @dev Now we push into the array
+			 */
+			proposals[id].offeredItems.push(swapItem);
+		}
+	}
 
 	/**
 	 * @dev Fulfill proposal
