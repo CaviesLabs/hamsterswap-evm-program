@@ -304,7 +304,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			 */
 			assert(
 				whitelistedItemAddresses[
-					option.askingItems[i].contractAddress
+					proposals[proposalId].offeredItems[i].contractAddress
 				] == true
 			);
 
