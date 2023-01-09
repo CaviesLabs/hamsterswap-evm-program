@@ -241,7 +241,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		assert(option.askingItems.length <= maxAllowedItems);
 
 		/**
-		 * @dev Deposit required items
+		 * @dev Transfer assets to owner
 		 */
 		for (uint256 i = 0; i < option.askingItems.length; i++) {
 			/**
@@ -254,9 +254,9 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			);
 
 			/**
-			 * @dev Change to deposited
+			 * @dev Change to Redeemed
 			 */
-			option.askingItems[i].status = Entity.SwapItemStatus.Deposited;
+			option.askingItems[i].status = Entity.SwapItemStatus.Redeemed;
 
 			/**
 			 * @dev Deposit ERC721 assets
@@ -267,7 +267,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 				 */
 				IERC721(option.askingItems[i].contractAddress).safeTransferFrom(
 						msg.sender,
-						address(this),
+						address(proposals[proposalId].owner),
 						option.askingItems[i].tokenId
 					);
 			}
@@ -284,9 +284,73 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 				assert(
 					IERC20(option.askingItems[i].contractAddress).transferFrom(
 						msg.sender,
-						address(this),
+						address(proposals[proposalId].owner),
 						option.askingItems[i].amount
 					)
+				);
+			}
+		}
+
+		/**
+		 * @dev And then redeem items
+		 */
+		for (
+			uint256 i = 0;
+			i < proposals[proposalId].offeredItems.length;
+			i++
+		) {
+			/**
+			 * @dev Must be a whitelisted addresses
+			 */
+			assert(
+				whitelistedItemAddresses[
+					option.askingItems[i].contractAddress
+				] == true
+			);
+
+			/**
+			 * @dev Change to Redeemed
+			 */
+			proposals[proposalId].offeredItems[i].status = Entity
+				.SwapItemStatus
+				.Redeemed;
+
+			/**
+			 * @dev Redeem ERC721 assets
+			 */
+			if (
+				proposals[proposalId].offeredItems[i].itemType ==
+				Entity.SwapItemType.Nft
+			) {
+				/**
+				 * @dev Redeem
+				 */
+				IERC721(proposals[proposalId].offeredItems[i].contractAddress)
+					.safeTransferFrom(
+						address(this),
+						msg.sender,
+						proposals[proposalId].offeredItems[i].tokenId
+					);
+			}
+
+			/**
+			 * @dev Deposit ERC20 assets
+			 */
+			if (
+				proposals[proposalId].offeredItems[i].itemType ==
+				Entity.SwapItemType.Currency
+			) {
+				/**
+				 * @dev Redeem
+				 */
+				assert(
+					IERC20(
+						proposals[proposalId].offeredItems[i].contractAddress
+					).transferFrom(
+							address(this),
+							msg.sender,
+							proposals[proposalId].offeredItems[i].amount
+						)
 				);
 			}
 		}
