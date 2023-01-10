@@ -231,7 +231,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		/**
 		 * @dev Binding option
 		 */
-		Entity.SwapOption memory option = proposals[proposalId].swapOptions[
+		Entity.SwapOption storage option = proposals[proposalId].swapOptions[
 			index
 		];
 
@@ -244,117 +244,22 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		/**
 		 * @dev Transfer assets to owner
 		 */
-		for (uint256 i = 0; i < option.askingItems.length; i++) {
-			/**
-			 * @dev Must be a whitelisted addresses
-			 */
-			assert(
-				whitelistedItemAddresses[
-					option.askingItems[i].contractAddress
-				] == true
-			);
-
-			/**
-			 * @dev Change to Redeemed
-			 */
-			option.askingItems[i].status = Entity.SwapItemStatus.Redeemed;
-
-			/**
-			 * @dev Deposit ERC721 assets
-			 */
-			if (option.askingItems[i].itemType == Entity.SwapItemType.Nft) {
-				/**
-				 * @dev Deposit
-				 */
-				IERC721(option.askingItems[i].contractAddress).safeTransferFrom(
-						msg.sender,
-						address(proposals[proposalId].owner),
-						option.askingItems[i].tokenId
-					);
-			}
-
-			/**
-			 * @dev Deposit ERC20 assets
-			 */
-			if (
-				option.askingItems[i].itemType == Entity.SwapItemType.Currency
-			) {
-				/**
-				 * @dev Deposit
-				 */
-				assert(
-					IERC20(option.askingItems[i].contractAddress).transferFrom(
-						msg.sender,
-						address(proposals[proposalId].owner),
-						option.askingItems[i].amount
-					)
-				);
-			}
-		}
+		transferSwapItems(
+			option.askingItems,
+			msg.sender,
+			address(proposals[proposalId].owner),
+			Entity.SwapItemStatus.Redeemed
+		);
 
 		/**
 		 * @dev And then redeem items
 		 */
-		for (
-			uint256 i = 0;
-			i < proposals[proposalId].offeredItems.length;
-			i++
-		) {
-			/**
-			 * @dev Must be a whitelisted addresses
-			 */
-			assert(
-				whitelistedItemAddresses[
-					proposals[proposalId].offeredItems[i].contractAddress
-				] == true
-			);
-
-			/**
-			 * @dev Change to Redeemed
-			 */
-			proposals[proposalId].offeredItems[i].status = Entity
-				.SwapItemStatus
-				.Redeemed;
-
-			/**
-			 * @dev Redeem ERC721 assets
-			 */
-			if (
-				proposals[proposalId].offeredItems[i].itemType ==
-				Entity.SwapItemType.Nft
-			) {
-				/**
-				 * @dev Redeem
-				 */
-				IERC721(proposals[proposalId].offeredItems[i].contractAddress)
-					.safeTransferFrom(
-						address(this),
-						msg.sender,
-						proposals[proposalId].offeredItems[i].tokenId
-					);
-			}
-
-			/**
-			 * @dev Deposit ERC20 assets
-			 */
-			if (
-				proposals[proposalId].offeredItems[i].itemType ==
-				Entity.SwapItemType.Currency
-			) {
-				/**
-				 * @dev Redeem
-				 */
-				assert(
-					IERC20(
-						proposals[proposalId].offeredItems[i].contractAddress
-					).transferFrom(
-							address(this),
-							msg.sender,
-							proposals[proposalId].offeredItems[i].amount
-						)
-				);
-			}
-		}
+		transferSwapItems(
+			proposals[proposalId].offeredItems,
+			address(this),
+			msg.sender,
+			Entity.SwapItemStatus.Redeemed
+		);
 	}
 
 	/**
@@ -383,59 +288,78 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		proposals[proposalId].status = Entity.ProposalStatus.Withdrawn;
 
 		/**
+		 * @dev Withdraw items
+		 */
+		transferSwapItems(
+			proposals[proposalId].offeredItems,
+			address(this),
+			msg.sender,
+			Entity.SwapItemStatus.Withdrawn
+		);
+	}
+
+	function transferSwapItems(
+		Entity.SwapItem[] storage items,
+		address from,
+		address to,
+		Entity.SwapItemStatus remark
+	) private {
+		/**
 		 * @dev And then withdraw items
 		 */
-		for (
-			uint256 i = 0;
-			i < proposals[proposalId].offeredItems.length;
-			i++
-		) {
+		for (uint256 i = 0; i < items.length; i++) {
+			/**
+			 * @dev Must be a whitelisted addresses
+			 */
+			assert(whitelistedItemAddresses[items[i].contractAddress] == true);
+
 			/**
 			 * @dev Change to withdrawn
 			 */
-			proposals[proposalId].offeredItems[i].status = Entity
-				.SwapItemStatus
-				.Withdrawn;
+			items[i].status = remark;
 
 			/**
 			 * @dev withdraw ERC721 assets
 			 */
-			if (
-				proposals[proposalId].offeredItems[i].itemType ==
-				Entity.SwapItemType.Nft
-			) {
+			if (items[i].itemType == Entity.SwapItemType.Nft) {
 				/**
 				 * @dev withdraw
 				 */
-				IERC721(proposals[proposalId].offeredItems[i].contractAddress)
-					.safeTransferFrom(
-						address(this),
-						msg.sender,
-						proposals[proposalId].offeredItems[i].tokenId
-					);
+				IERC721(items[i].contractAddress).safeTransferFrom(
+					from,
+					to,
+					items[i].tokenId
+				);
 			}
 
 			/**
 			 * @dev withdraw ERC20 assets
 			 */
-			if (
-				proposals[proposalId].offeredItems[i].itemType ==
-				Entity.SwapItemType.Currency
-			) {
+			if (items[i].itemType == Entity.SwapItemType.Currency) {
 				/**
 				 * @dev withdraw
 				 */
 				assert(
-					IERC20(
-						proposals[proposalId].offeredItems[i].contractAddress
-					).transferFrom(
-							address(this),
-							msg.sender,
-							proposals[proposalId].offeredItems[i].amount
-						)
+					IERC20(items[i].contractAddress).transferFrom(
+						from,
+						to,
+						items[i].amount
+					)
 				);
 			}
 		}
+	}
+
+	/**
+	 * @dev Utility function
+	 */
+	function areStringsEqual(string memory s1, string memory s2)
+		private
+		pure
+		returns (bool)
+	{
+		return
+			keccak256(abi.encodePacked(s1)) == keccak256(abi.encodePacked(s2));
 	}
 
 	/// @custom:oz-upgrades-unsafe-allow constructor
@@ -454,14 +378,5 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 
 	function unpause() public onlyOwner {
 		_unpause();
-	}
-
-	function areStringsEqual(string memory s1, string memory s2)
-		private
-		pure
-		returns (bool)
-	{
-		return
-			keccak256(abi.encodePacked(s1)) == keccak256(abi.encodePacked(s2));
 	}
 }
