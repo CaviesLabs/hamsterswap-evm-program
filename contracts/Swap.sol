@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import "./Entity.sol";
+import "./Params.sol";
 
 /**
  * @notice HamsterSwap which is a trustless p2p exchange,
@@ -22,7 +23,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 	 */
 	uint256 public maxAllowedItems;
 	uint256 public maxAllowedOptions;
-	mapping(address => bool) public whitelistedItemAddresses;
+	mapping(address => bool) public whitelistedAddresses;
 
 	/**
 	 * @dev Storing proposal data inside a mapping
@@ -52,14 +53,14 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		 * @dev Whitelisting addresses
 		 */
 		for (uint256 i = 0; i < _whitelistedItemAddresses.length; i++) {
-			whitelistedItemAddresses[_whitelistedItemAddresses[i]] = true;
+			whitelistedAddresses[_whitelistedItemAddresses[i]] = true;
 		}
 
 		/**
 		 * @dev Blacklisted addresses
 		 */
 		for (uint256 i = 0; i < _blackListedItemAddresses.length; i++) {
-			whitelistedItemAddresses[_blackListedItemAddresses[i]] = false;
+			whitelistedAddresses[_blackListedItemAddresses[i]] = false;
 		}
 	}
 
@@ -72,8 +73,8 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 	 */
 	function createProposal(
 		string memory id,
-		Entity.SwapItem[] memory swapItemsData,
-		Entity.SwapOption[] memory swapOptionsData,
+		Params.SwapItemParams[] memory swapItemsData,
+		Params.SwapOptionParams[] memory swapOptionsData,
 		uint256 expiredAt
 	) external whenNotPaused {
 		/**
@@ -86,6 +87,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		 */
 		assert(swapOptionsData.length <= maxAllowedOptions);
 		assert(swapItemsData.length <= maxAllowedItems);
+		assert(expiredAt > block.timestamp);
 
 		/**
 		 * @dev Assign proposal
@@ -114,10 +116,9 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 					.askingItems[j]
 					.contractAddress;
 				item.itemType = swapOptionsData[i].askingItems[j].itemType;
-				item.owner = msg.sender;
-				item.status = Entity.SwapItemStatus.Deposited;
 				item.tokenId = swapOptionsData[i].askingItems[j].tokenId;
 				item.amount = swapOptionsData[i].askingItems[j].amount;
+				item.status = Entity.SwapItemStatus.Created;
 			}
 		}
 
@@ -129,8 +130,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			 * @dev Must be a whitelisted addresses
 			 */
 			assert(
-				whitelistedItemAddresses[swapItemsData[i].contractAddress] ==
-					true
+				whitelistedAddresses[swapItemsData[i].contractAddress] == true
 			);
 
 			/**
@@ -146,10 +146,10 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			swapItem.id = swapItemsData[i].id;
 			swapItem.contractAddress = swapItemsData[i].contractAddress;
 			swapItem.itemType = swapItemsData[i].itemType;
-			swapItem.owner = msg.sender;
-			swapItem.status = Entity.SwapItemStatus.Deposited;
 			swapItem.tokenId = swapItemsData[i].tokenId;
 			swapItem.amount = swapItemsData[i].amount;
+			swapItem.owner = msg.sender;
+			swapItem.status = Entity.SwapItemStatus.Deposited;
 
 			/**
 			 * @dev Deposit ERC721 assets
@@ -320,7 +320,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			/**
 			 * @dev Must be a whitelisted addresses
 			 */
-			assert(whitelistedItemAddresses[items[i].contractAddress] == true);
+			assert(whitelistedAddresses[items[i].contractAddress] == true);
 
 			/**
 			 * @dev Change to withdrawn

@@ -66,9 +66,8 @@ describe("HamsterSwap", function () {
     /**
      * @dev Expect
      */
-    expect(await Swap.whitelistedItemAddresses(MockedERC721.address)).to.be
-      .true;
-    expect(await Swap.whitelistedItemAddresses(MockedERC20.address)).to.be.true;
+    expect(await Swap.whitelistedAddresses(MockedERC721.address)).to.be.true;
+    expect(await Swap.whitelistedAddresses(MockedERC20.address)).to.be.true;
     expect(await Swap.maxAllowedItems()).to.eq("3");
     expect(await Swap.maxAllowedOptions()).to.eq("4");
   });
@@ -98,11 +97,9 @@ describe("HamsterSwap", function () {
       {
         id: "offeredItem_1",
         contractAddress: MockedERC20.address,
-        owner: otherAccount.address,
         itemType: 1,
         amount: ethers.BigNumber.from((10 * 10 ** 18).toString()),
         tokenId: 1,
-        status: 1,
       },
     ];
     const askingItems = [
@@ -112,11 +109,9 @@ describe("HamsterSwap", function () {
           {
             id: "askingItem_1",
             contractAddress: MockedERC721.address,
-            owner: otherAccount.address,
             amount: 1,
             tokenId: 1,
             itemType: 1,
-            status: 1,
           },
         ],
       },
