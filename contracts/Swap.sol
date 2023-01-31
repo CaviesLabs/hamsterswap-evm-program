@@ -99,13 +99,25 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		 * @dev Aggregate swap option data
 		 */
 		for (uint256 i = 0; i < swapOptionsData.length; i++) {
+			Entity.SwapOption storage option = proposals[id].swapOptions.push();
+			option.id = swapOptionsData[i].id;
+
 			for (
 				uint256 j = 0;
 				j < swapOptionsData[i].askingItems.length;
 				j++
 			) {
-				proposals[id].swapOptions[i].askingItems[j] = swapOptionsData[i]
-					.askingItems[j];
+				Entity.SwapItem storage item = option.askingItems.push();
+
+				item.id = swapOptionsData[i].askingItems[j].id;
+				item.contractAddress = swapOptionsData[i]
+					.askingItems[j]
+					.contractAddress;
+				item.itemType = swapOptionsData[i].askingItems[j].itemType;
+				item.owner = msg.sender;
+				item.status = Entity.SwapItemStatus.Deposited;
+				item.tokenId = swapOptionsData[i].askingItems[j].tokenId;
+				item.amount = swapOptionsData[i].askingItems[j].amount;
 			}
 		}
 
@@ -124,7 +136,9 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			/**
 			 * @dev Initialize empty struct
 			 */
-			Entity.SwapItem memory swapItem;
+			Entity.SwapItem storage swapItem = proposals[id]
+				.offeredItems
+				.push();
 
 			/**
 			 * @dev Assign data
@@ -168,11 +182,6 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 					)
 				);
 			}
-
-			/**
-			 * @dev Now we push into the array
-			 */
-			proposals[id].offeredItems.push(swapItem);
 		}
 	}
 

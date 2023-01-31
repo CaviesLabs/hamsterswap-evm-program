@@ -29,7 +29,10 @@ describe("HamsterSwap", function () {
     /**
      * @dev Funding erc20
      */
-    MockedERC20.connect(owner).transfer(otherAccount.address, 1000 * 10 ** 18);
+    await MockedERC20.connect(owner).transfer(
+      otherAccount.address,
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(10000)
+    );
 
     /**
      * @dev Deploy contract
@@ -78,8 +81,14 @@ describe("HamsterSwap", function () {
     /**
      * @dev Approve first
      */
-    MockedERC20.connect(otherAccount).approve(Swap.address, 2 ** 256 - 1);
-    MockedERC721.connect(otherAccount).setApprovalForAll(Swap.address, true);
+    await MockedERC20.connect(otherAccount).approve(
+      Swap.address,
+      ethers.BigNumber.from(ethers.constants.MaxInt256)
+    );
+    await MockedERC721.connect(otherAccount).setApprovalForAll(
+      Swap.address,
+      true
+    );
 
     /**
      * @dev Create and deposit proposal
@@ -90,7 +99,7 @@ describe("HamsterSwap", function () {
         id: "offeredItem_1",
         contractAddress: MockedERC20.address,
         owner: otherAccount.address,
-        itemType: 2,
+        itemType: 1,
         amount: ethers.BigNumber.from((10 * 10 ** 18).toString()),
         tokenId: 1,
         status: 1,
@@ -106,6 +115,8 @@ describe("HamsterSwap", function () {
             owner: otherAccount.address,
             amount: 1,
             tokenId: 1,
+            itemType: 1,
+            status: 1,
           },
         ],
       },
@@ -119,7 +130,7 @@ describe("HamsterSwap", function () {
     await Swap.connect(otherAccount).createProposal(
       proposalId,
       offeredItems,
-      // askingItems,
+      askingItems,
       expiredAt
     );
 
