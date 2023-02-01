@@ -31,7 +31,7 @@ describe("HamsterSwap", function () {
      */
     await MockedERC20.connect(owner).transfer(
       otherAccount.address,
-      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(10000)
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
     );
 
     /**
@@ -90,6 +90,18 @@ describe("HamsterSwap", function () {
     );
 
     /**
+     * @dev Expect initial values
+     */
+    expect(await MockedERC20.balanceOf(otherAccount.address)).eq(
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
+    );
+    expect(await MockedERC721.balanceOf(otherAccount.address)).eq(1);
+    expect(await MockedERC721.ownerOf(2)).eq(otherAccount.address);
+
+    expect(await MockedERC20.balanceOf(Swap.address)).eq(0);
+    expect(await MockedERC721.balanceOf(Swap.address)).eq(0);
+
+    /**
      * @dev Create and deposit proposal
      */
     const proposalId = "proposal_1";
@@ -101,6 +113,20 @@ describe("HamsterSwap", function () {
         amount: ethers.BigNumber.from((10 * 10 ** 18).toString()),
         tokenId: 1,
       },
+      {
+        id: "offeredItem_2",
+        contractAddress: MockedERC20.address,
+        itemType: 1,
+        amount: ethers.BigNumber.from((10 * 10 ** 18).toString()),
+        tokenId: 1,
+      },
+      {
+        id: "offeredItem_3",
+        contractAddress: MockedERC721.address,
+        itemType: 0,
+        amount: 1,
+        tokenId: 2,
+      },
     ];
     const askingItems = [
       {
@@ -111,7 +137,7 @@ describe("HamsterSwap", function () {
             contractAddress: MockedERC721.address,
             amount: 1,
             tokenId: 1,
-            itemType: 1,
+            itemType: 0,
           },
         ],
       },
@@ -132,6 +158,75 @@ describe("HamsterSwap", function () {
     /**
      * @dev Expect
      */
-    console.log(await Swap.proposals(proposalId));
+    const proposal = await Swap.proposals(proposalId);
+
+    /**
+     * @dev Expect initial values
+     */
+    expect(proposal.id).eq(proposalId);
+    expect(proposal.status).eq(1); // which means the status is deposited
+    expect(proposal.expiredAt).eq(expiredAt);
+    expect(proposal.owner).eq(otherAccount.address);
+    expect(proposal.fulfilledBy).eq(ethers.constants.AddressZero);
+    expect(proposal.fulfilledByOptionId).eq("");
+
+    /**
+     * @dev Expect items and options
+     */
+    const [items, options] = await Swap.getProposalItemsAndOptions(proposalId);
+
+    /**
+     * @dev Expect offered items have been recoded properly
+     */
+    offeredItems.map((item, index) => {
+      expect(item.id).eq(items[index].id);
+      expect(item.itemType).eq(items[index].itemType);
+      expect(item.amount).eq(items[index].amount);
+      expect(item.contractAddress).eq(items[index].contractAddress);
+      expect(items[index].owner).eq(otherAccount.address); // owner is recorded properly
+      expect(items[index].status).eq(1); // status changed to deposited
+
+      if (item.itemType === 1) {
+        expect(items[index].tokenId).eq(0);
+      } else {
+        expect(item.tokenId).eq(items[index].tokenId);
+      }
+    });
+
+    /**
+     * @dev Expect options have been recorded properly
+     */
+    askingItems.map((elm, index) => {
+      expect(elm.id).eq(options[index].id);
+
+      elm.askingItems.map((item, itemIndex) => {
+        expect(item.id).eq(options[index].askingItems[itemIndex].id);
+        expect(item.itemType).eq(
+          options[index].askingItems[itemIndex].itemType
+        );
+        expect(item.amount).eq(options[index].askingItems[itemIndex].amount);
+        expect(item.contractAddress).eq(
+          options[index].askingItems[itemIndex].contractAddress
+        );
+        expect(item.tokenId).eq(options[index].askingItems[itemIndex].tokenId);
+
+        expect(options[index].askingItems[itemIndex].status).eq(0); // status has been recoded as created
+        expect(options[index].askingItems[itemIndex].owner).eq(
+          ethers.constants.AddressZero
+        ); // status has been recoded as created
+      });
+    });
+
+    /**
+     * @dev After transferring to the contract, the balance will be empty
+     */
+    expect(await MockedERC20.balanceOf(otherAccount.address)).eq(0);
+    expect(await MockedERC721.balanceOf(otherAccount.address)).eq(0);
+
+    expect(await MockedERC20.balanceOf(Swap.address)).eq(
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
+    );
+    expect(await MockedERC721.balanceOf(Swap.address)).eq(1);
+    expect(await MockedERC721.ownerOf(2)).eq(Swap.address);
   });
 });

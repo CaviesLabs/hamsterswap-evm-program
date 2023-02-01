@@ -8,6 +8,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 import "./Entity.sol";
 import "./Params.sol";
@@ -17,7 +18,12 @@ import "./Params.sol";
  * handles NFT-NFT, NFT-Currency and Currency-Currency swap transactions.
  **/
 /// @custom:security-contact khang@cavies.xyz
-contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
+contract HamsterSwap is
+	Initializable,
+	PausableUpgradeable,
+	OwnableUpgradeable,
+	IERC721Receiver
+{
 	/**
 	 * @dev Administration configurations
 	 */
@@ -29,6 +35,19 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 	 * @dev Storing proposal data inside a mapping
 	 */
 	mapping(string => Entity.Proposal) public proposals;
+	mapping(string => bool) public uniqueStringRegistry;
+
+	/**
+	 * @dev Get proposal items and options
+	 * @param id: id of the proposal
+	 */
+	function getProposalItemsAndOptions(string memory id)
+		external
+		view
+		returns (Entity.SwapItem[] memory, Entity.SwapOption[] memory)
+	{
+		return (proposals[id].offeredItems, proposals[id].swapOptions);
+	}
 
 	/**
 	 * @dev Configure swap registry
@@ -83,6 +102,11 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		assert(bytes(proposals[id].id).length == 0);
 
 		/**
+		 * @dev Must be unique id
+		 */
+		assert(uniqueStringRegistry[id] == false);
+
+		/**
 		 * @dev Require constraints
 		 */
 		assert(swapOptionsData.length <= maxAllowedOptions);
@@ -92,13 +116,14 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		/**
 		 * @dev Assign proposal
 		 */
+		uniqueStringRegistry[id] = true;
 		proposals[id].id = id;
 		proposals[id].expiredAt = expiredAt;
 		proposals[id].status = Entity.ProposalStatus.Deposited;
 		proposals[id].owner = msg.sender;
 
 		/**
-		 * @dev Aggregate swap option data
+		 * @dev Populate data
 		 */
 		for (uint256 i = 0; i < swapOptionsData.length; i++) {
 			Entity.SwapOption storage option = proposals[id].swapOptions.push();
@@ -123,7 +148,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 		}
 
 		/**
-		 * @dev Deposit items and adjust data properly
+		 * @dev Populate data
 		 */
 		for (uint256 i = 0; i < swapItemsData.length; i++) {
 			/**
@@ -146,43 +171,21 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			swapItem.id = swapItemsData[i].id;
 			swapItem.contractAddress = swapItemsData[i].contractAddress;
 			swapItem.itemType = swapItemsData[i].itemType;
-			swapItem.tokenId = swapItemsData[i].tokenId;
 			swapItem.amount = swapItemsData[i].amount;
 			swapItem.owner = msg.sender;
 			swapItem.status = Entity.SwapItemStatus.Deposited;
-
-			/**
-			 * @dev Deposit ERC721 assets
-			 */
-			if (swapItem.itemType == Entity.SwapItemType.Nft) {
-				swapItem.amount = 1;
-
-				/**
-				 * @dev Deposit
-				 */
-				IERC721(swapItem.contractAddress).safeTransferFrom(
-					msg.sender,
-					address(this),
-					swapItem.tokenId
-				);
-			}
-
-			/**
-			 * @dev Deposit ERC20 assets
-			 */
-			if (swapItem.itemType == Entity.SwapItemType.Currency) {
-				/**
-				 * @dev Deposit
-				 */
-				assert(
-					IERC20(swapItem.contractAddress).transferFrom(
-						msg.sender,
-						address(this),
-						swapItem.amount
-					)
-				);
-			}
+			swapItem.tokenId = swapItemsData[i].tokenId;
 		}
+
+		/**
+		 * @dev Transfer items from user address to contract
+		 */
+		transferSwapItems(
+			proposals[id].offeredItems,
+			msg.sender,
+			address(this),
+			Entity.SwapItemStatus.Deposited
+		);
 	}
 
 	/**
@@ -331,6 +334,8 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			 * @dev withdraw ERC721 assets
 			 */
 			if (items[i].itemType == Entity.SwapItemType.Nft) {
+				items[i].amount = 1;
+
 				/**
 				 * @dev withdraw
 				 */
@@ -345,6 +350,7 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 			 * @dev withdraw ERC20 assets
 			 */
 			if (items[i].itemType == Entity.SwapItemType.Currency) {
+				items[i].tokenId = 0;
 				/**
 				 * @dev withdraw
 				 */
@@ -387,5 +393,14 @@ contract HamsterSwap is Initializable, PausableUpgradeable, OwnableUpgradeable {
 
 	function unpause() public onlyOwner {
 		_unpause();
+	}
+
+	function onERC721Received(
+		address,
+		address,
+		uint256,
+		bytes calldata
+	) external pure returns (bytes4) {
+		return IERC721Receiver.onERC721Received.selector;
 	}
 }
