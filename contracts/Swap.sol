@@ -126,6 +126,15 @@ contract HamsterSwap is
 		 * @dev Populate data
 		 */
 		for (uint256 i = 0; i < swapOptionsData.length; i++) {
+			/**
+			 * @dev Ensure the id is unique
+			 */
+			assert(uniqueStringRegistry[swapOptionsData[i].id] == false);
+			uniqueStringRegistry[swapOptionsData[i].id] = true;
+
+			/**
+			 * @dev Populate swap option data
+			 */
 			Entity.SwapOption storage option = proposals[id].swapOptions.push();
 			option.id = swapOptionsData[i].id;
 
@@ -134,6 +143,21 @@ contract HamsterSwap is
 				j < swapOptionsData[i].askingItems.length;
 				j++
 			) {
+				/**
+				 * @dev Ensure the id is unique
+				 */
+				assert(
+					uniqueStringRegistry[
+						swapOptionsData[i].askingItems[j].id
+					] == false
+				);
+				uniqueStringRegistry[
+					swapOptionsData[i].askingItems[j].id
+				] = true;
+
+				/**
+				 * @dev Populate swap item data
+				 */
 				Entity.SwapItem storage item = option.askingItems.push();
 
 				item.id = swapOptionsData[i].askingItems[j].id;
@@ -157,6 +181,12 @@ contract HamsterSwap is
 			assert(
 				whitelistedAddresses[swapItemsData[i].contractAddress] == true
 			);
+
+			/**
+			 * @dev Ensure the id is unique
+			 */
+			assert(uniqueStringRegistry[swapItemsData[i].id] == false);
+			uniqueStringRegistry[swapItemsData[i].id] = true;
 
 			/**
 			 * @dev Initialize empty struct
