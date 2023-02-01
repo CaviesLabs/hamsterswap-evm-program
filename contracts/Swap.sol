@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
@@ -21,6 +22,7 @@ import "./Params.sol";
 contract HamsterSwap is
 	Initializable,
 	PausableUpgradeable,
+	ReentrancyGuardUpgradeable,
 	OwnableUpgradeable,
 	IERC721Receiver
 {
@@ -95,7 +97,7 @@ contract HamsterSwap is
 		Params.SwapItemParams[] memory swapItemsData,
 		Params.SwapOptionParams[] memory swapOptionsData,
 		uint256 expiredAt
-	) external whenNotPaused {
+	) external nonReentrant whenNotPaused {
 		/**
 		 * @dev Avoid duplicated proposal id to be recorded in.
 		 */
@@ -105,6 +107,7 @@ contract HamsterSwap is
 		 * @dev Must be unique id
 		 */
 		assert(uniqueStringRegistry[id] == false);
+		uniqueStringRegistry[id] = true;
 
 		/**
 		 * @dev Require constraints
@@ -116,7 +119,6 @@ contract HamsterSwap is
 		/**
 		 * @dev Assign proposal
 		 */
-		uniqueStringRegistry[id] = true;
 		proposals[id].id = id;
 		proposals[id].expiredAt = expiredAt;
 		proposals[id].status = Entity.ProposalStatus.Deposited;
@@ -225,6 +227,7 @@ contract HamsterSwap is
 	 */
 	function fulfillProposal(string memory proposalId, string memory optionId)
 		external
+		nonReentrant
 		whenNotPaused
 	{
 		/**
@@ -308,7 +311,11 @@ contract HamsterSwap is
 	 * @dev Cancel proposal and withdraw assets
 	 * @param proposalId: proposal id that was targeted
 	 */
-	function cancelProposal(string memory proposalId) external whenNotPaused {
+	function cancelProposal(string memory proposalId)
+		external
+		nonReentrant
+		whenNotPaused
+	{
 		/**
 		 * @dev Must be an existed proposal
 		 */
