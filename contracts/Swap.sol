@@ -135,6 +135,11 @@ contract HamsterSwap is
 			uniqueStringRegistry[swapOptionsData[i].id] = true;
 
 			/**
+			 * @dev Check for constraints
+			 */
+			assert(bytes(swapOptionsData[i].id).length > 0);
+
+			/**
 			 * @dev Populate swap option data
 			 */
 			Entity.SwapOption storage option = proposals[id].swapOptions.push();
@@ -156,6 +161,15 @@ contract HamsterSwap is
 				uniqueStringRegistry[
 					swapOptionsData[i].askingItems[j].id
 				] = true;
+
+				/**
+				 * @dev Must be a whitelisted addresses
+				 */
+				assert(
+					whitelistedAddresses[
+						swapOptionsData[i].askingItems[j].contractAddress
+					] == true
+				);
 
 				/**
 				 * @dev Populate swap item data
@@ -243,7 +257,7 @@ contract HamsterSwap is
 		/**
 		 * @dev The proposal must be still in time window.
 		 */
-		assert(proposals[proposalId].expiredAt <= block.timestamp);
+		assert(proposals[proposalId].expiredAt > block.timestamp);
 
 		/**
 		 * @dev Adjust proposal value.
@@ -279,12 +293,6 @@ contract HamsterSwap is
 		Entity.SwapOption storage option = proposals[proposalId].swapOptions[
 			index
 		];
-
-		/**
-		 * @dev Check for constraints
-		 */
-		assert(bytes(proposals[proposalId].swapOptions[index].id).length > 0);
-		assert(option.askingItems.length <= maxAllowedItems);
 
 		/**
 		 * @dev Transfer assets to owner
@@ -360,7 +368,7 @@ contract HamsterSwap is
 			/**
 			 * @dev Must be a whitelisted addresses
 			 */
-			assert(whitelistedAddresses[items[i].contractAddress] == true);
+			require(whitelistedAddresses[items[i].contractAddress] == true);
 
 			/**
 			 * @dev Change to withdrawn
@@ -391,13 +399,22 @@ contract HamsterSwap is
 				/**
 				 * @dev withdraw
 				 */
-				assert(
-					IERC20(items[i].contractAddress).transferFrom(
-						from,
-						to,
-						items[i].amount
-					)
-				);
+				if (from == address(this)) {
+					assert(
+						IERC20(items[i].contractAddress).transfer(
+							to,
+							items[i].amount
+						)
+					);
+				} else {
+					assert(
+						IERC20(items[i].contractAddress).transferFrom(
+							from,
+							to,
+							items[i].amount
+						)
+					);
+				}
 			}
 		}
 	}

@@ -3,7 +3,9 @@ import { expect } from "chai";
 import { ethers, upgrades } from "hardhat";
 import { HamsterSwap } from "../typechain-types";
 
-describe("HamsterSwap", function () {
+describe("HamsterSwap", async function () {
+  let fixtures: Awaited<ReturnType<typeof deployFixtures>>;
+
   // We define a fixture to reuse the same setup in every test.
   // We use loadFixture to run this setup once, snapshot that state,
   // and reset Hardhat Network to that snapshopt in every test.
@@ -22,15 +24,15 @@ describe("HamsterSwap", function () {
     /**
      * @dev Mint erc721
      */
-    const [owner, otherAccount] = await ethers.getSigners();
-    await MockedERC721.connect(owner).safeMint(owner.address, "1");
-    await MockedERC721.connect(owner).safeMint(otherAccount.address, "2");
+    const [owner, seller, buyer] = await ethers.getSigners();
+    await MockedERC721.connect(owner).safeMint(buyer.address, "1");
+    await MockedERC721.connect(owner).safeMint(seller.address, "2");
 
     /**
      * @dev Funding erc20
      */
     await MockedERC20.connect(owner).transfer(
-      otherAccount.address,
+      seller.address,
       ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
     );
 
@@ -55,13 +57,15 @@ describe("HamsterSwap", function () {
     /**
      * @dev return
      */
-    return { Swap, MockedERC20, MockedERC721, owner, otherAccount };
+    return { Swap, MockedERC20, MockedERC721, owner, seller, buyer };
   }
 
+  before(async () => {
+    fixtures = await loadFixture(deployFixtures);
+  });
+
   it("Should: admin can configure swap registry", async function () {
-    const { Swap, MockedERC20, MockedERC721 } = await loadFixture(
-      deployFixtures
-    );
+    const { Swap, MockedERC20, MockedERC721 } = fixtures;
 
     /**
      * @dev Expect
@@ -73,30 +77,25 @@ describe("HamsterSwap", function () {
   });
 
   it("Should: anyone can create proposal and deposit items", async () => {
-    const { Swap, MockedERC20, MockedERC721, otherAccount } = await loadFixture(
-      deployFixtures
-    );
+    const { Swap, MockedERC20, MockedERC721, seller } = fixtures;
 
     /**
      * @dev Approve first
      */
-    await MockedERC20.connect(otherAccount).approve(
+    await MockedERC20.connect(seller).approve(
       Swap.address,
       ethers.BigNumber.from(ethers.constants.MaxInt256)
     );
-    await MockedERC721.connect(otherAccount).setApprovalForAll(
-      Swap.address,
-      true
-    );
+    await MockedERC721.connect(seller).setApprovalForAll(Swap.address, true);
 
     /**
      * @dev Expect initial values
      */
-    expect(await MockedERC20.balanceOf(otherAccount.address)).eq(
+    expect(await MockedERC20.balanceOf(seller.address)).eq(
       ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
     );
-    expect(await MockedERC721.balanceOf(otherAccount.address)).eq(1);
-    expect(await MockedERC721.ownerOf(2)).eq(otherAccount.address);
+    expect(await MockedERC721.balanceOf(seller.address)).eq(1);
+    expect(await MockedERC721.ownerOf(2)).eq(seller.address);
 
     expect(await MockedERC20.balanceOf(Swap.address)).eq(0);
     expect(await MockedERC721.balanceOf(Swap.address)).eq(0);
@@ -141,6 +140,18 @@ describe("HamsterSwap", function () {
           },
         ],
       },
+      {
+        id: "option_2",
+        askingItems: [
+          {
+            id: "askingItem_2",
+            contractAddress: MockedERC20.address,
+            amount: 1,
+            tokenId: 1,
+            itemType: 1,
+          },
+        ],
+      },
     ];
     const expiredAt =
       parseInt((new Date().getTime() / 1000).toString()) + 60 * 60;
@@ -148,7 +159,7 @@ describe("HamsterSwap", function () {
     /**
      * @dev Call contract
      */
-    await Swap.connect(otherAccount).createProposal(
+    await Swap.connect(seller).createProposal(
       proposalId,
       offeredItems,
       askingItems,
@@ -166,7 +177,7 @@ describe("HamsterSwap", function () {
     expect(proposal.id).eq(proposalId);
     expect(proposal.status).eq(1); // which means the status is deposited
     expect(proposal.expiredAt).eq(expiredAt);
-    expect(proposal.owner).eq(otherAccount.address);
+    expect(proposal.owner).eq(seller.address);
     expect(proposal.fulfilledBy).eq(ethers.constants.AddressZero);
     expect(proposal.fulfilledByOptionId).eq("");
 
@@ -183,7 +194,7 @@ describe("HamsterSwap", function () {
       expect(item.itemType).eq(items[index].itemType);
       expect(item.amount).eq(items[index].amount);
       expect(item.contractAddress).eq(items[index].contractAddress);
-      expect(items[index].owner).eq(otherAccount.address); // owner is recorded properly
+      expect(items[index].owner).eq(seller.address); // owner is recorded properly
       expect(items[index].status).eq(1); // status changed to deposited
 
       if (item.itemType === 1) {
@@ -220,13 +231,91 @@ describe("HamsterSwap", function () {
     /**
      * @dev After transferring to the contract, the balance will be empty
      */
-    expect(await MockedERC20.balanceOf(otherAccount.address)).eq(0);
-    expect(await MockedERC721.balanceOf(otherAccount.address)).eq(0);
+    expect(await MockedERC20.balanceOf(seller.address)).eq(0);
+    expect(await MockedERC721.balanceOf(seller.address)).eq(0);
 
     expect(await MockedERC20.balanceOf(Swap.address)).eq(
       ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
     );
     expect(await MockedERC721.balanceOf(Swap.address)).eq(1);
     expect(await MockedERC721.ownerOf(2)).eq(Swap.address);
+  });
+
+  it("should: anyone can fulfill proposal if he/she owns the required items and exec the swap", async () => {
+    const { Swap, MockedERC20, MockedERC721, seller, buyer } = fixtures;
+
+    /**
+     * @dev Before fulfilling the proposal, the balance will be empty
+     */
+    expect(await MockedERC20.balanceOf(buyer.address)).eq(0);
+    expect(await MockedERC721.balanceOf(buyer.address)).eq(1);
+    expect(await MockedERC721.ownerOf(1)).eq(buyer.address);
+
+    expect(await MockedERC20.balanceOf(seller.address)).eq(0);
+    expect(await MockedERC721.balanceOf(seller.address)).eq(0);
+
+    expect(await MockedERC20.balanceOf(Swap.address)).eq(
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
+    );
+    expect(await MockedERC721.balanceOf(Swap.address)).eq(1);
+    expect(await MockedERC721.ownerOf(2)).eq(Swap.address);
+
+    /**
+     * @dev Approve first
+     */
+    await MockedERC721.connect(buyer).setApprovalForAll(Swap.address, true);
+
+    /**
+     * @dev Call contract
+     */
+    await Swap.connect(buyer).fulfillProposal("proposal_1", "option_1");
+
+    /**
+     * @dev Expect
+     */
+    const proposal = await Swap.proposals("proposal_1");
+    const [items, options] = await Swap.getProposalItemsAndOptions(
+      "proposal_1"
+    );
+
+    expect(proposal.status).eq(4); // Redeemed
+    expect(proposal.fulfilledByOptionId).eq("option_1");
+    expect(proposal.fulfilledBy).eq(buyer.address);
+
+    /**
+     * @dev Expect offered items have been recoded properly
+     */
+    items.map((item, index) => {
+      expect(items[index].owner).eq(seller.address); // owner is recorded properly
+      expect(items[index].status).eq(2); // status changed to REDEEMED
+    });
+
+    /**
+     * @dev Expect options have been recorded properly
+     */
+    options
+      .filter((elm) => elm.id === "option_1")
+      .map((elm, index) => {
+        elm.askingItems.map((item, itemIndex) => {
+          expect(options[index].askingItems[itemIndex].status).eq(2); // status has been recoded as REDEEMED
+          expect(options[index].askingItems[itemIndex].owner).eq(buyer); // status has been recoded as created
+        });
+      });
+
+    /**
+     * @dev Before fulfilling the proposal, the balance will be empty
+     */
+    expect(await MockedERC20.balanceOf(buyer.address)).eq(
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(20)
+    );
+    expect(await MockedERC721.balanceOf(buyer.address)).eq(1);
+    expect(await MockedERC721.ownerOf(2)).eq(buyer.address);
+
+    expect(await MockedERC20.balanceOf(seller.address)).eq(0);
+    expect(await MockedERC721.balanceOf(seller.address)).eq(1);
+    expect(await MockedERC721.ownerOf(1)).eq(seller.address);
+
+    expect(await MockedERC20.balanceOf(Swap.address)).eq(0);
+    expect(await MockedERC721.balanceOf(Swap.address)).eq(0);
   });
 });
