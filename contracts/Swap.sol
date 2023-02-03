@@ -230,7 +230,8 @@ contract HamsterSwap is
 			proposals[id].offeredItems,
 			msg.sender,
 			address(this),
-			Entity.SwapItemStatus.Deposited
+			Entity.SwapItemStatus.Deposited,
+			address(0)
 		);
 	}
 
@@ -301,7 +302,8 @@ contract HamsterSwap is
 			option.askingItems,
 			msg.sender,
 			address(proposals[proposalId].owner),
-			Entity.SwapItemStatus.Redeemed
+			Entity.SwapItemStatus.Redeemed,
+			msg.sender
 		);
 
 		/**
@@ -311,7 +313,8 @@ contract HamsterSwap is
 			proposals[proposalId].offeredItems,
 			address(this),
 			msg.sender,
-			Entity.SwapItemStatus.Redeemed
+			Entity.SwapItemStatus.Redeemed,
+			address(0)
 		);
 	}
 
@@ -330,7 +333,7 @@ contract HamsterSwap is
 		assert(bytes(proposals[proposalId].id).length > 0);
 
 		/**
-		 * @dev The proposal must be at deposited phase.
+		 * @dev The proposal owner has the rights to cancel the proposal.
 		 */
 		assert(proposals[proposalId].owner == msg.sender);
 
@@ -351,7 +354,8 @@ contract HamsterSwap is
 			proposals[proposalId].offeredItems,
 			address(this),
 			msg.sender,
-			Entity.SwapItemStatus.Withdrawn
+			Entity.SwapItemStatus.Withdrawn,
+			address(0)
 		);
 	}
 
@@ -359,7 +363,8 @@ contract HamsterSwap is
 		Entity.SwapItem[] storage items,
 		address from,
 		address to,
-		Entity.SwapItemStatus remark
+		Entity.SwapItemStatus remarkedStatus,
+		address remarkedOwner
 	) private {
 		/**
 		 * @dev And then withdraw items
@@ -371,19 +376,23 @@ contract HamsterSwap is
 			require(whitelistedAddresses[items[i].contractAddress] == true);
 
 			/**
-			 * @dev Change to withdrawn
+			 * @dev Change to remarkedStatus
 			 */
-			items[i].status = remark;
+			items[i].status = remarkedStatus;
 
 			/**
-			 * @dev withdraw ERC721 assets
+			 * @dev Change to remarked owner if needed
+			 */
+			if (remarkedOwner != address(0)) {
+				items[i].owner = remarkedOwner;
+			}
+
+			/**
+			 * @dev transfer ERC721 assets
 			 */
 			if (items[i].itemType == Entity.SwapItemType.Nft) {
 				items[i].amount = 1;
 
-				/**
-				 * @dev withdraw
-				 */
 				IERC721(items[i].contractAddress).safeTransferFrom(
 					from,
 					to,
@@ -392,13 +401,11 @@ contract HamsterSwap is
 			}
 
 			/**
-			 * @dev withdraw ERC20 assets
+			 * @dev transfer ERC20 assets
 			 */
 			if (items[i].itemType == Entity.SwapItemType.Currency) {
 				items[i].tokenId = 0;
-				/**
-				 * @dev withdraw
-				 */
+
 				if (from == address(this)) {
 					assert(
 						IERC20(items[i].contractAddress).transfer(

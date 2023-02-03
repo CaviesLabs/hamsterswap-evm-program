@@ -298,7 +298,7 @@ describe("HamsterSwap", async function () {
       .map((elm, index) => {
         elm.askingItems.map((item, itemIndex) => {
           expect(options[index].askingItems[itemIndex].status).eq(2); // status has been recoded as REDEEMED
-          expect(options[index].askingItems[itemIndex].owner).eq(buyer); // status has been recoded as created
+          expect(options[index].askingItems[itemIndex].owner).eq(buyer.address); // owner has been updated to buyer address
         });
       });
 
@@ -317,5 +317,141 @@ describe("HamsterSwap", async function () {
 
     expect(await MockedERC20.balanceOf(Swap.address)).eq(0);
     expect(await MockedERC721.balanceOf(Swap.address)).eq(0);
+  });
+
+  it("should: non-proposal owner cannot cancel proposal", async () => {
+    const { Swap, MockedERC20, MockedERC721, seller, owner, buyer } = fixtures;
+
+    /**
+     * @dev Funding erc20
+     */
+    await MockedERC20.connect(owner).transfer(
+      seller.address,
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(10)
+    );
+
+    /**
+     * @dev Create and deposit proposal
+     */
+    const proposalId = "proposal_2";
+    const offeredItems = [
+      {
+        id: "offeredItem_4",
+        contractAddress: MockedERC20.address,
+        itemType: 1,
+        amount: ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(10),
+        tokenId: 1,
+      },
+    ];
+    const askingItems = [
+      {
+        id: "option_3",
+        askingItems: [
+          {
+            id: "askingItem_5",
+            contractAddress: MockedERC721.address,
+            amount: 1,
+            tokenId: 1,
+            itemType: 0,
+          },
+        ],
+      },
+    ];
+    const expiredAt =
+      parseInt((new Date().getTime() / 1000).toString()) + 60 * 60;
+
+    /**
+     * @dev Call contract
+     */
+    await Swap.connect(seller).createProposal(
+      proposalId,
+      offeredItems,
+      askingItems,
+      expiredAt
+    );
+
+    expect(await MockedERC20.balanceOf(seller.address)).eq(0);
+
+    /**
+     * @dev Cannot cancel the redeemed proposal
+     */
+    try {
+      await Swap.connect(buyer).cancelProposal("proposal_2");
+      throw new Error("Should failed");
+    } catch (e: any) {
+      expect(
+        e
+          .toString()
+          .includes(
+            "Error: VM Exception while processing transaction: reverted with panic code 0x1"
+          )
+      ).eq(true);
+    }
+  });
+
+  it("shoud: proposan owner can cancel proposal", async () => {
+    const { Swap, MockedERC20, seller } = fixtures;
+
+    /**
+     * @dev Cancel
+     */
+    await Swap.connect(seller).cancelProposal("proposal_2");
+
+    const proposal = await Swap.proposals("proposal_2");
+    const [items] = await Swap.getProposalItemsAndOptions("proposal_2");
+
+    expect(proposal.status).eq(5); // Canceled
+
+    /**
+     * @dev Expect offered items have been recoded properly
+     */
+    items.map((item, index) => {
+      expect(items[index].owner).eq(seller.address); // owner is recorded properly
+      expect(items[index].status).eq(3); // status changed to REDEEMED
+    });
+
+    expect(await MockedERC20.balanceOf(seller.address)).eq(
+      ethers.BigNumber.from(ethers.constants.WeiPerEther).mul(10)
+    );
+  });
+
+  it("should: proposal owner cannot cancel the completed proposal", async () => {
+    const { Swap, seller } = fixtures;
+
+    /**
+     * @dev Cannot cancel the redeemed proposal
+     */
+    try {
+      await Swap.connect(seller).cancelProposal("proposal_1");
+      throw new Error("Should failed");
+    } catch (e: any) {
+      expect(
+        e
+          .toString()
+          .includes(
+            "Error: VM Exception while processing transaction: reverted with panic code 0x1"
+          )
+      ).eq(true);
+    }
+  });
+
+  it("should: proposal owner cannot cancel the withdrawn proposal", async () => {
+    const { Swap, seller } = fixtures;
+
+    /**
+     * @dev Cannot cancel the redeemed proposal
+     */
+    try {
+      await Swap.connect(seller).cancelProposal("proposal_2");
+      throw new Error("Should failed");
+    } catch (e: any) {
+      expect(
+        e
+          .toString()
+          .includes(
+            "Error: VM Exception while processing transaction: reverted with panic code 0x1"
+          )
+      ).eq(true);
+    }
   });
 });

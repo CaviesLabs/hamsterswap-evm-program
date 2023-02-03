@@ -14,3 +14,4 @@ test.ts
 .DS_Store
 curve.ts
 curve.json
+.nyc_output
