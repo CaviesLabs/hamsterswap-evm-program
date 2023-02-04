@@ -95,6 +95,13 @@ if (!testEnv && privateKey) {
       gasPrice: "auto",
       chainId: 42161,
     },
+    goerli: {
+      url: "https://goerli.blockpi.network/v1/rpc/public",
+      accounts: [privateKey],
+      gas: "auto",
+      gasPrice: "auto",
+      chainId: 5,
+    },
   };
 }
 

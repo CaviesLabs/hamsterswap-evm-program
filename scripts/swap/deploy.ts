@@ -1,27 +1,15 @@
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
+import { HamsterSwap } from "../../typechain-types";
 
 async function main() {
-  /**
-   * Deploy helper library first
-   */
-  const Helper = await ethers.getContractFactory("Helper");
-  const helperContract = await Helper.deploy();
-  await helperContract.deployed();
+  const SwapContract = await ethers.getContractFactory("HamsterSwap");
+  const Swap = (await upgrades.deployProxy(SwapContract, [], {
+    unsafeAllowCustomTypes: true,
+  })) as HamsterSwap;
 
-  /**
-   * Deploy poker deck contract with linked Helper library
-   */
-  const PokerDeck = await ethers.getContractFactory("PokerHand", {
-    libraries: {
-      Helper: helperContract.address,
-    },
-  });
+  await Swap.deployed();
 
-  const pokerDeck = await PokerDeck.deploy();
-  await pokerDeck.deployed();
-
-  await pokerDeck.mint({ value: ethers.utils.parseEther("50") });
-  console.log("Deployed PokerHand contract at:", pokerDeck.address);
+  console.log("HamsterSwap deployed at:", Swap.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
