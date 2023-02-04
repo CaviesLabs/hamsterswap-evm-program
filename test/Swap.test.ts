@@ -3,6 +3,36 @@ import { expect } from "chai";
 import { ethers, upgrades } from "hardhat";
 import { HamsterSwap } from "../typechain-types";
 
+/**
+ * @dev Define the item type
+ */
+enum SwapItemType {
+  Nft,
+  Currency,
+}
+
+/**
+ * @dev Define status enum
+ */
+enum SwapItemStatus {
+  Created,
+  Deposited,
+  Redeemed,
+  Withdrawn,
+}
+
+/**
+ * @dev Define proposal status
+ */
+enum ProposalStatus {
+  Created,
+  Deposited,
+  Fulfilled,
+  Canceled,
+  Redeemed,
+  Withdrawn,
+}
+
 describe("HamsterSwap", async function () {
   let fixtures: Awaited<ReturnType<typeof deployFixtures>>;
 
@@ -108,21 +138,21 @@ describe("HamsterSwap", async function () {
       {
         id: "offeredItem_1",
         contractAddress: MockedERC20.address,
-        itemType: 1,
+        itemType: SwapItemType.Currency,
         amount: ethers.BigNumber.from((10 * 10 ** 18).toString()),
         tokenId: 1,
       },
       {
         id: "offeredItem_2",
         contractAddress: MockedERC20.address,
-        itemType: 1,
+        itemType: SwapItemType.Currency,
         amount: ethers.BigNumber.from((10 * 10 ** 18).toString()),
         tokenId: 1,
       },
       {
         id: "offeredItem_3",
         contractAddress: MockedERC721.address,
-        itemType: 0,
+        itemType: SwapItemType.Nft,
         amount: 1,
         tokenId: 2,
       },
@@ -136,7 +166,7 @@ describe("HamsterSwap", async function () {
             contractAddress: MockedERC721.address,
             amount: 1,
             tokenId: 1,
-            itemType: 0,
+            itemType: SwapItemType.Nft,
           },
         ],
       },
@@ -148,7 +178,7 @@ describe("HamsterSwap", async function () {
             contractAddress: MockedERC20.address,
             amount: 1,
             tokenId: 1,
-            itemType: 1,
+            itemType: SwapItemType.Currency,
           },
         ],
       },
@@ -175,7 +205,7 @@ describe("HamsterSwap", async function () {
      * @dev Expect initial values
      */
     expect(proposal.id).eq(proposalId);
-    expect(proposal.status).eq(1); // which means the status is deposited
+    expect(proposal.status).eq(ProposalStatus.Deposited); // which means the status is deposited
     expect(proposal.expiredAt).eq(expiredAt);
     expect(proposal.owner).eq(seller.address);
     expect(proposal.fulfilledBy).eq(ethers.constants.AddressZero);
@@ -195,7 +225,7 @@ describe("HamsterSwap", async function () {
       expect(item.amount).eq(items[index].amount);
       expect(item.contractAddress).eq(items[index].contractAddress);
       expect(items[index].owner).eq(seller.address); // owner is recorded properly
-      expect(items[index].status).eq(1); // status changed to deposited
+      expect(items[index].status).eq(ProposalStatus.Deposited); // status changed to deposited
 
       if (item.itemType === 1) {
         expect(items[index].tokenId).eq(0);
@@ -221,7 +251,9 @@ describe("HamsterSwap", async function () {
         );
         expect(item.tokenId).eq(options[index].askingItems[itemIndex].tokenId);
 
-        expect(options[index].askingItems[itemIndex].status).eq(0); // status has been recoded as created
+        expect(options[index].askingItems[itemIndex].status).eq(
+          ProposalStatus.Created
+        ); // status has been recoded as created
         expect(options[index].askingItems[itemIndex].owner).eq(
           ethers.constants.AddressZero
         ); // status has been recoded as created
@@ -278,7 +310,7 @@ describe("HamsterSwap", async function () {
       "proposal_1"
     );
 
-    expect(proposal.status).eq(4); // Redeemed
+    expect(proposal.status).eq(ProposalStatus.Redeemed); // Redeemed
     expect(proposal.fulfilledByOptionId).eq("option_1");
     expect(proposal.fulfilledBy).eq(buyer.address);
 
@@ -287,7 +319,7 @@ describe("HamsterSwap", async function () {
      */
     items.map((item, index) => {
       expect(items[index].owner).eq(seller.address); // owner is recorded properly
-      expect(items[index].status).eq(2); // status changed to REDEEMED
+      expect(items[index].status).eq(SwapItemStatus.Redeemed); // status changed to REDEEMED
     });
 
     /**
@@ -297,7 +329,9 @@ describe("HamsterSwap", async function () {
       .filter((elm) => elm.id === "option_1")
       .map((elm, index) => {
         elm.askingItems.map((item, itemIndex) => {
-          expect(options[index].askingItems[itemIndex].status).eq(2); // status has been recoded as REDEEMED
+          expect(options[index].askingItems[itemIndex].status).eq(
+            SwapItemStatus.Redeemed
+          ); // status has been recoded as REDEEMED
           expect(options[index].askingItems[itemIndex].owner).eq(buyer.address); // owner has been updated to buyer address
         });
       });
@@ -407,7 +441,7 @@ describe("HamsterSwap", async function () {
      */
     items.map((item, index) => {
       expect(items[index].owner).eq(seller.address); // owner is recorded properly
-      expect(items[index].status).eq(3); // status changed to REDEEMED
+      expect(items[index].status).eq(SwapItemStatus.Withdrawn);
     });
 
     expect(await MockedERC20.balanceOf(seller.address)).eq(
